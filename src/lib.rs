@@ -5,13 +5,6 @@ mod trait_impls;
 
 use core::{mem::MaybeUninit, ptr::addr_of_mut};
 
-#[derive(Debug)]
-pub enum Error {
-    NotEnoughCapacity,
-}
-
-pub type Result<T> = core::result::Result<T, Error>;
-
 /// A pushable array with fixed capacity.
 ///
 /// Stack-allocated drop-in replacement for `Vec`, panic on `.push()` if capacity is
@@ -91,10 +84,8 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
     /// // Not enough capacity!
     /// assert!(arr.push_checked(9).is_err());
     /// ```
-    pub fn push_checked(&mut self, value: T) -> Result<()> {
-        (self.len < CAP)
-            .then(|| unsafe { self.push_unchecked(value) })
-            .ok_or(Error::NotEnoughCapacity)
+    pub fn push_checked(&mut self, value: T) -> Option<()> {
+        unsafe { (self.len < CAP).then(|| self.push_unchecked(value)) }
     }
 
     /// Push an element to the back of this [`PushArray`].
@@ -116,9 +107,9 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
     }
 
     /// Push all elements of the given array at the end of the [`PushArray`].
-    pub fn push_array<const M: usize>(&mut self, array: [T; M]) -> Result<()> {
+    pub fn push_array<const M: usize>(&mut self, array: [T; M]) -> Option<()> {
         if self.len + M > CAP {
-            return Err(Error::NotEnoughCapacity);
+            return None;
         }
 
         unsafe {
@@ -129,7 +120,7 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
 
         self.len += M;
 
-        Ok(())
+        Some(())
     }
 
     /// Removes the last element from the `PushArray`.
@@ -212,13 +203,13 @@ impl<T: Copy, const CAP: usize> PushArray<T, CAP> {
     // ```
     // # use pushy::PushArray;
     // let mut bytes: PushArray<u8, 5> = PushArray::new();
-    // bytes.copy_from_slice(b"Hello").unwrap();
+    // bytes.extend_from_slice(b"Hello").unwrap();
     //
     // assert_eq!(bytes.as_str(), Some("Hello"));
     // ```
-    pub fn copy_from_slice(&mut self, slice: &[T]) -> Result<()> {
+    pub fn extend_from_slice(&mut self, slice: &[T]) -> Option<()> {
         if self.len + slice.len() > CAP {
-            return Err(Error::NotEnoughCapacity);
+            return None;
         }
 
         // Safety: we've just checked that there is enough storage
@@ -234,7 +225,7 @@ impl<T: Copy, const CAP: usize> PushArray<T, CAP> {
         }
 
         self.len += slice.len();
-        Ok(())
+        Some(())
     }
 }
 
@@ -253,6 +244,10 @@ impl<const CAP: usize> PushArray<u8, CAP> {
         core::str::from_utf8(self).ok()
     }
 
+    pub unsafe fn as_str_unchecked(&self) -> &str {
+        core::str::from_utf8_unchecked(self)
+    }
+
     /// Push a UTF-8 string to the back of this [`PushArray`].
     ///
     /// ```
@@ -263,9 +258,9 @@ impl<const CAP: usize> PushArray<u8, CAP> {
     /// bytes.push_str("Hello").unwrap();
     /// assert_eq!(bytes.as_str(), Some("Hello"));
     /// ```
-    pub fn push_str(&mut self, value: &str) -> Result<()> {
+    pub fn push_str(&mut self, value: &str) -> Option<()> {
         let bytes = value.as_bytes();
 
-        self.copy_from_slice(bytes)
+        self.extend_from_slice(bytes)
     }
 }

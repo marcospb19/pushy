@@ -66,7 +66,7 @@ let mut bytes: PushArray<u8, 10> = PushArray::new();
 
 let hello = [b'H', b'e', b'l', b'l', b'o'];
 // You can copy from a slice (currently only for Copy types)
-bytes.copy_from_slice(&hello)?;
+bytes.extend_from_slice(&hello)?;
 
 assert_eq!(bytes.as_str(), Some("Hello"));
 

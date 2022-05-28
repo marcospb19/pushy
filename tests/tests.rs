@@ -103,11 +103,11 @@ fn deref_to_slice() {
 }
 
 #[test]
-fn copy_from_slice_fails_when_not_enough_capacity() {
+fn extend_from_slice_fails_when_not_enough_capacity() {
     let mut arr: PushArray<u8, 3> = PushArray::new();
     let zeroes = [0, 0, 0, 0];
 
-    assert!(arr.copy_from_slice(&zeroes).is_err());
+    assert!(arr.extend_from_slice(&zeroes).is_err());
 }
 
 #[test]
@@ -157,7 +157,7 @@ fn length() {
 fn push_array() {
     let mut bytes: PushArray<u8, 10> = PushArray::new();
     let hello = [b'H', b'e', b'l', b'l', b'o'];
-    bytes.copy_from_slice(&hello).unwrap();
+    bytes.extend_from_slice(&hello).unwrap();
     assert_eq!(bytes.as_str(), Some("Hello"));
 
     bytes.push_array(hello).unwrap();
@@ -178,11 +178,11 @@ fn as_str_and_push_str() {
 }
 
 #[test]
-fn copy_from_slice() {
+fn extend_from_slice() {
     let mut arr: PushArray<_, 10usize> = PushArray::new();
     let byte_slice = b"rogue-like";
 
-    arr.copy_from_slice(byte_slice).unwrap();
+    arr.extend_from_slice(byte_slice).unwrap();
 
     assert_eq!(arr.as_slice(), byte_slice)
 }
