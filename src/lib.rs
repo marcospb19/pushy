@@ -7,7 +7,6 @@ use core::{
     hash::Hash,
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
-    ptr::addr_of_mut,
 };
 
 /// A pushable array with fixed capacity.
@@ -40,12 +39,6 @@ pub struct PushArray<T, const CAP: usize> {
 }
 
 impl<T, const CAP: usize> PushArray<T, CAP> {
-    #[inline]
-    const fn array_of_uninit() -> [MaybeUninit<T>; CAP] {
-        // Safety: safe since this is an array of `MaybeUninit`s and they don't require initialization
-        unsafe { MaybeUninit::uninit().assume_init() }
-    }
-
     /// Create an empty [`PushArray`] with the given capacity.
     /// ```
     /// # use pushy::PushArray;
@@ -56,8 +49,8 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
     /// assert_eq!(arr, []);
     /// ```
     pub const fn new() -> Self {
-        let buf = Self::array_of_uninit();
-
+        // Safety: safe because target type is [MaybeUninit<T>; CAP], it does not drop nor requires initialization
+        let buf = unsafe { MaybeUninit::uninit().assume_init() };
         Self { buf, len: 0 }
     }
 
@@ -66,12 +59,10 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
     ///
     /// # Safety
     ///
-    /// The programmer must ensure this function does not push data after the end of the buffer, which would cause undefined behavior.
+    /// Caller must ensure that there is enough capacity.
     pub unsafe fn push_unchecked(&mut self, value: T) {
         let ptr = self.buf.as_mut_ptr();
-        addr_of_mut!(*ptr)
-            .add(self.len)
-            .write(MaybeUninit::new(value));
+        ptr.add(self.len).write(MaybeUninit::new(value));
 
         self.len += 1;
     }
@@ -100,12 +91,7 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
     /// Panics if the capacity of this array is overrun.
     ///
     /// ```
-    /// # use pushy::PushArray;
-    /// let mut bytes: PushArray<u8, 2> = PushArray::new();
-    /// bytes.push(b'H');
-    /// bytes.push(b'i');
-    ///
-    /// assert_eq!(bytes.as_str().unwrap(), "Hi");
+    /// ...
     /// ```
     pub fn push(&mut self, value: T) {
         self.push_checked(value).expect("overflow in PushArray!")
