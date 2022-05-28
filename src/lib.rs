@@ -2,12 +2,12 @@
 
 #![cfg_attr(not(test), no_std)]
 
-use core::{mem::MaybeUninit, ptr::addr_of_mut};
-
 use core::{
     fmt::Debug,
     hash::Hash,
+    mem::MaybeUninit,
     ops::{Deref, DerefMut},
+    ptr::addr_of_mut,
 };
 
 /// A pushable array with fixed capacity.
@@ -354,9 +354,9 @@ impl<T, const CAP: usize> FromIterator<T> for PushArray<T, CAP> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use std::sync::Arc;
+
+    use super::*;
 
     #[test]
     fn drop() {
