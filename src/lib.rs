@@ -1,9 +1,10 @@
 //! A pushable array type with fixed capacity.
 
 #![allow(rustdoc::all)]
-#![cfg_attr(not(test), no_std)]
 #![warn(unsafe_op_in_unsafe_fn)]
 #![allow(clippy::missing_safety_doc)]
+#![cfg_attr(not(any(std, test)), no_std)]
+
 use core::{
     fmt::Debug,
     hash::Hash,
@@ -11,18 +12,19 @@ use core::{
     ops::{Deref, DerefMut},
     ptr,
 };
-
-// ($elem:expr; $n:expr) => (
-//     $crate::__rust_force_expr!($crate::vec::from_elem($elem, $n))
-// );
+#[cfg(std)]
+use std::vec::Vec;
 
 #[macro_export]
 macro_rules! arr {
     () => (
-        $core::__rust_force_expr!($crate::PushArray::new())
+        $crate::PushArray::new()
     );
     ($($x:expr),+ $(,)?) => (
-        PushArray::from([$($x),+])
+        $crate::PushArray::from([$($x),+])
+    );
+    ($elem:expr; $n:expr) => (
+        $crate::PushArray::repeat($crate::vec::from_elem($elem, $n))
     );
 }
 
@@ -74,6 +76,14 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
     pub fn append(&mut self, other: &mut Self) {
         unsafe {
             self.append_elements(other.buf.as_slice() as *const [MaybeUninit<T>] as *const [T]);
+            other.set_len(0);
+        }
+    }
+
+    #[cfg(no_std)]
+    pub fn append_vec(&mut self, other: &mut std::vec::Vec<T>) {
+        unsafe {
+            self.append_elements(other.as_slice() as *const [T]);
             other.set_len(0);
         }
     }
@@ -177,12 +187,12 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
         &mut self.buf as *mut [MaybeUninit<T>] as *mut T
     }
 
-    /// Reference to elements.
+    /// Reference to inner slice.
     pub fn as_slice(&self) -> &[T] {
         self.deref()
     }
 
-    /// Mutable Reference to elements.
+    /// Mutable reference to inner slice.
     pub fn as_mut_slice(&mut self) -> &mut [T] {
         self.deref_mut()
     }
@@ -378,60 +388,7 @@ impl<T, const CAP: usize> FromIterator<T> for PushArray<T, CAP> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use super::*;
-
-    #[test]
-    fn drop() {
-        let arc = Arc::new(0);
-
-        {
-            let mut arr: PushArray<_, 3> = PushArray::new();
-            for _ in 0..3 {
-                arr.push(arc.clone());
-            }
-            // There should now be 4 references to the
-            // element of the Arc
-            assert_eq!(Arc::strong_count(&arc), 4);
-        }
-
-        // The PushArray must've been dropped
-        //
-        // Therefore the reference count of the Arc
-        // should now be 1.
-        assert_eq!(Arc::strong_count(&arc), 1);
-    }
-
-    #[test]
-    fn clear() {
-        let arc = Arc::new(0);
-
-        let mut arr: PushArray<_, 4> = PushArray::new();
-        for _ in 0..4 {
-            arr.push(arc.clone());
-        }
-
-        let popped = arr.pop().unwrap();
-
-        arr.clear();
-
-        assert_eq!(Arc::strong_count(&arc), 2);
-        assert_eq!(arr.len(), 0);
-        assert_eq!(*popped, 0);
-    }
-
-    #[test]
-    fn pop_drop() {
-        let arc = Arc::new(0);
-        let mut arr: PushArray<_, 1> = PushArray::new();
-
-        arr.push(arc.clone());
-        assert_eq!(Arc::strong_count(&arc), 2);
-
-        arr.pop().unwrap();
-        assert_eq!(Arc::strong_count(&arc), 1);
-    }
 
     #[test]
     fn pop_str() {
@@ -682,6 +639,9 @@ mod tests {
 
     #[test]
     fn test_macros() {
+        let pushy: PushArray<i32, 100> = arr![];
+        assert_eq!(pushy, []);
+
         let pushy: PushArray<_, 4> = arr![1, 2, 3, 4];
 
         assert_eq!(pushy.len(), 4);
@@ -701,5 +661,64 @@ mod tests {
         assert_eq!(array.capacity(), 6);
 
         assert_eq!(array, [1, 2, 3, 4]);
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod tests_with_std {
+    use std::sync::Arc;
+
+    use super::*;
+
+    #[test]
+    fn drop() {
+        let arc = Arc::new(0);
+
+        {
+            let mut arr: PushArray<_, 3> = PushArray::new();
+            for _ in 0..3 {
+                arr.push(arc.clone());
+                assert_eq!(Arc::strong_count(&arc), 1 + arr.len());
+            }
+            // There should now be 4 references to the
+            // element of the Arc
+            assert_eq!(Arc::strong_count(&arc), 4);
+        }
+
+        // The PushArray must've been dropped
+        //
+        // Therefore the reference count of the Arc
+        // should now be 1.
+        assert_eq!(Arc::strong_count(&arc), 1);
+    }
+
+    #[test]
+    fn clear() {
+        let arc = Arc::new(0);
+
+        let mut arr: PushArray<_, 4> = PushArray::new();
+        for _ in 0..4 {
+            arr.push(arc.clone());
+        }
+
+        let popped = arr.pop().unwrap();
+
+        arr.clear();
+
+        assert_eq!(Arc::strong_count(&arc), 2);
+        assert_eq!(arr.len(), 0);
+        assert_eq!(*popped, 0);
+    }
+
+    #[test]
+    fn pop_drop() {
+        let arc = Arc::new(0);
+        let mut arr: PushArray<_, 1> = PushArray::new();
+
+        arr.push(arc.clone());
+        assert_eq!(Arc::strong_count(&arc), 2);
+
+        arr.pop().unwrap();
+        assert_eq!(Arc::strong_count(&arc), 1);
     }
 }
