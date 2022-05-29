@@ -1,13 +1,30 @@
 //! A pushable array type with fixed capacity.
 
+#![allow(rustdoc::all)]
 #![cfg_attr(not(test), no_std)]
-
+#![warn(unsafe_op_in_unsafe_fn)]
+#![allow(clippy::missing_safety_doc)]
 use core::{
     fmt::Debug,
     hash::Hash,
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
+    ptr,
 };
+
+// ($elem:expr; $n:expr) => (
+//     $crate::__rust_force_expr!($crate::vec::from_elem($elem, $n))
+// );
+
+#[macro_export]
+macro_rules! arr {
+    () => (
+        $core::__rust_force_expr!($crate::PushArray::new())
+    );
+    ($($x:expr),+ $(,)?) => (
+        PushArray::from([$($x),+])
+    );
+}
 
 /// A pushable array with fixed capacity.
 ///
@@ -54,6 +71,22 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
         Self { buf, len: 0 }
     }
 
+    pub fn append(&mut self, other: &mut Self) {
+        unsafe {
+            self.append_elements(other.buf.as_slice() as *const [MaybeUninit<T>] as *const [T]);
+            other.set_len(0);
+        }
+    }
+
+    unsafe fn append_elements(&mut self, other: *const [T]) {
+        let count = unsafe { (*other).len() };
+        assert!(self.len + count <= self.buf.len(), "no capacity for append");
+        unsafe {
+            ptr::copy_nonoverlapping(other as *const T, self.as_mut_ptr().add(self.len), count)
+        };
+        self.len += count;
+    }
+
     /// Pushes an element to the back of the [`PushArray`] without
     /// checking the boundaries of the array first.
     ///
@@ -62,9 +95,20 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
     /// Caller must ensure that there is enough capacity.
     pub unsafe fn push_unchecked(&mut self, value: T) {
         let ptr = self.buf.as_mut_ptr();
-        ptr.add(self.len).write(MaybeUninit::new(value));
-
+        unsafe {
+            ptr.add(self.len).write(MaybeUninit::new(value));
+        }
         self.len += 1;
+    }
+
+    pub unsafe fn set_len(&mut self, new_len: usize) {
+        assert!(new_len <= self.capacity());
+
+        self.len = new_len;
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.buf.len()
     }
 
     /// Push an element to the end of this array after making sure
@@ -89,10 +133,6 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
     /// # Panics
     ///
     /// Panics if the capacity of this array is overrun.
-    ///
-    /// ```
-    /// ...
-    /// ```
     pub fn push(&mut self, value: T) {
         self.push_checked(value).expect("overflow in PushArray!")
     }
@@ -122,45 +162,32 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
         unsafe {
             let ptr = self.as_ptr().add(self.len) as *const T;
             popped.write(ptr.read());
-            // Safety: we've just written to `popped`, therefore we
-            //         can assume it's uninitialized
+            // Safety: we've just written to `popped`, it's initialized
             Some(popped.assume_init())
         }
     }
 
     /// Gets a pointer to the first element of the array.
-    ///
-    /// # Safety
-    ///
-    /// * There is no guarantee that the first element pointed to is initialized.
-    ///
-    /// * There is no guarantee that the first element exists (if the capacity allocated was zero).
-    pub unsafe fn as_ptr(&self) -> *const T {
+    pub fn as_ptr(&self) -> *const T {
         &self.buf as *const [MaybeUninit<T>] as *const T
     }
 
     /// Gets a mutable pointer to the first element of the array.
-    ///
-    /// # Safety
-    ///
-    /// * There is no guarantee that the first element pointed to is initialized.
-    ///
-    /// * There is no guarantee that the first element exists (if the capacity allocated was zero).
-    pub unsafe fn as_mut_ptr(&mut self) -> *mut T {
+    pub fn as_mut_ptr(&mut self) -> *mut T {
         &mut self.buf as *mut [MaybeUninit<T>] as *mut T
     }
 
-    /// Extracts a slice containing the entire array.
+    /// Reference to elements.
     pub fn as_slice(&self) -> &[T] {
-        self
+        self.deref()
     }
 
-    /// Extracts a mutable slice containing the entire array.
+    /// Mutable Reference to elements.
     pub fn as_mut_slice(&mut self) -> &mut [T] {
-        self
+        self.deref_mut()
     }
 
-    /// Clear the [`PushArray`]. All initialized elements will be dropped.
+    /// Clear the [`PushArray`]. Dropping it's elements.
     ///
     /// ```
     /// # use pushy::PushArray;
@@ -235,8 +262,13 @@ impl<const CAP: usize> PushArray<u8, CAP> {
         core::str::from_utf8(self).ok()
     }
 
+    /// PLACEHOLDER TEXT
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure array is made of valid utf-8
     pub unsafe fn as_str_unchecked(&self) -> &str {
-        core::str::from_utf8_unchecked(self)
+        unsafe { core::str::from_utf8_unchecked(self) }
     }
 
     /// Push a UTF-8 string to the back of this [`PushArray`].
@@ -256,6 +288,12 @@ impl<const CAP: usize> PushArray<u8, CAP> {
     }
 }
 
+impl<T, const CAP: usize, const LEN: usize> From<[T; LEN]> for PushArray<T, CAP> {
+    fn from(other: [T; LEN]) -> Self {
+        other.into_iter().collect()
+    }
+}
+
 impl<T: Clone, const CAP: usize> Clone for PushArray<T, CAP> {
     fn clone(&self) -> Self {
         self.iter().cloned().collect()
@@ -271,7 +309,7 @@ impl<T: Hash, const CAP: usize> Hash for PushArray<T, CAP> {
 
 impl<T, const CAP: usize> AsRef<[T]> for PushArray<T, CAP> {
     fn as_ref(&self) -> &[T] {
-        self
+        self.deref()
     }
 }
 
@@ -640,5 +678,28 @@ mod tests {
         let numbers: PushArray<u8, 0> = array.iter().copied().collect();
 
         assert_eq!(numbers.as_slice(), array.as_slice());
+    }
+
+    #[test]
+    fn test_macros() {
+        let pushy: PushArray<_, 4> = arr![1, 2, 3, 4];
+
+        assert_eq!(pushy.len(), 4);
+        assert_eq!(pushy.capacity(), 4);
+
+        assert_eq!(pushy, [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_from_array() {
+        let array = [1, 2, 3, 4];
+
+        let array: PushArray<u16, 6> = PushArray::from(array);
+
+        // let numbers: PushArray<u8, 0> = array.iter().copied().collect();
+        assert_eq!(array.len(), 4);
+        assert_eq!(array.capacity(), 6);
+
+        assert_eq!(array, [1, 2, 3, 4]);
     }
 }
