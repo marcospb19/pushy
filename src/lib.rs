@@ -24,7 +24,7 @@ macro_rules! arr {
         $crate::PushArray::from([$($x),+])
     );
     ($elem:expr; $n:expr) => (
-        $crate::PushArray::repeat($crate::vec::from_elem($elem, $n))
+        $crate::PushArray::from_elem($elem, $n)
     );
 }
 
@@ -86,6 +86,20 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
             self.append_elements(other.as_slice() as *const [T]);
             other.set_len(0);
         }
+    }
+
+    // For the macro arr![elem; N]
+    #[allow(dead_code)] // Only used in macro
+    fn from_elem(elem: T, n: usize) -> Self
+    where
+        T: Clone,
+    {
+        let mut new = Self::new();
+        for _ in 0..n.saturating_sub(1) {
+            new.push(elem.clone());
+        }
+        new.push(elem);
+        new
     }
 
     unsafe fn append_elements(&mut self, other: *const [T]) {
@@ -648,6 +662,9 @@ mod tests {
         assert_eq!(pushy.capacity(), 4);
 
         assert_eq!(pushy, [1, 2, 3, 4]);
+
+        let pushy: PushArray<_, 4> = arr![1; 4];
+        assert_eq!(pushy, [1, 1, 1, 1]);
     }
 
     #[test]
