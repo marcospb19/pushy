@@ -102,6 +102,26 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
         new
     }
 
+    pub fn dedup(&mut self) {
+        todo!();
+    }
+
+    pub fn dedup_by(&mut self) {
+        todo!();
+    }
+
+    pub fn dedup_by_key(&mut self) {
+        todo!();
+    }
+
+    pub fn drain(&mut self) {
+        todo!();
+    }
+
+    pub fn drain_filter(&mut self) {
+        todo!();
+    }
+
     unsafe fn append_elements(&mut self, other: *const [T]) {
         let count = unsafe { (*other).len() };
         assert!(self.len + count <= self.buf.len(), "no capacity for append");
