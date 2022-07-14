@@ -355,6 +355,7 @@ impl<const CAP: usize> PushArray<u8, CAP> {
     /// bytes.push_str(" World").unwrap();
     /// assert_eq!(bytes.as_str(), Some("Hello World"));
     /// ```
+    #[doc(hidden)]
     pub fn as_str(&self) -> Option<&str> {
         core::str::from_utf8(self).ok()
     }
@@ -364,6 +365,7 @@ impl<const CAP: usize> PushArray<u8, CAP> {
     /// # Safety
     ///
     /// Caller must ensure array is made of valid utf-8
+    #[doc(hidden)]
     pub unsafe fn as_str_unchecked(&self) -> &str {
         unsafe { core::str::from_utf8_unchecked(self) }
     }
@@ -478,7 +480,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pop_str() {
+    fn test_pop_str() {
         let mut arr: PushArray<&str, 2> = PushArray::new();
         arr.push("Over");
         arr.push("There");
@@ -494,7 +496,7 @@ mod tests {
     }
 
     #[test]
-    fn partial_eq() {
+    fn test_partial_eq() {
         let mut arr1: PushArray<u64, 2> = PushArray::new();
         arr1.push(5);
         arr1.push(10);
@@ -507,7 +509,7 @@ mod tests {
     }
 
     #[test]
-    fn into_iter() {
+    fn test_into_iter() {
         let mut arr: PushArray<u64, 2> = PushArray::new();
         arr.push(5);
         arr.push(10);
@@ -517,7 +519,7 @@ mod tests {
     }
 
     #[test]
-    fn deref_to_slice() {
+    fn test_deref_to_slice() {
         let mut arr: PushArray<u8, 5> = PushArray::new();
         arr.push_str("World").unwrap();
 
@@ -527,7 +529,7 @@ mod tests {
     }
 
     #[test]
-    fn extend_from_slice_fails_when_not_enough_capacity() {
+    fn test_extend_from_slice_fails_when_not_enough_capacity() {
         let mut arr: PushArray<u8, 3> = PushArray::new();
         let zeroes = [0, 0, 0, 0];
 
@@ -535,7 +537,7 @@ mod tests {
     }
 
     #[test]
-    fn push_array_fails_when_not_enough_capacity() {
+    fn test_push_array_fails_when_not_enough_capacity() {
         let mut arr: PushArray<u8, 3> = PushArray::new();
         let zeroes = [0, 0, 0, 0];
 
@@ -543,7 +545,7 @@ mod tests {
     }
 
     #[test]
-    fn push_checked() {
+    fn test_push_checked() {
         let mut arr: PushArray<u8, 3> = PushArray::new();
         assert!(arr.push_checked(10).is_some());
         assert!(arr.push_checked(20).is_some());
@@ -555,7 +557,7 @@ mod tests {
     }
 
     #[test]
-    fn length() {
+    fn test_length() {
         let mut bytes: PushArray<u8, 9> = PushArray::new();
         assert_eq!(bytes.len(), 0);
         assert!(bytes.is_empty());
@@ -578,7 +580,7 @@ mod tests {
     }
 
     #[test]
-    fn push_array() {
+    fn test_push_array() {
         let mut bytes: PushArray<u8, 10> = PushArray::new();
         let hello = [b'H', b'e', b'l', b'l', b'o'];
         bytes.extend_from_slice(&hello).unwrap();
@@ -589,7 +591,7 @@ mod tests {
     }
 
     #[test]
-    fn as_str_and_push_str() {
+    fn test_as_str_and_push_str() {
         let mut bytes: PushArray<u8, 11> = PushArray::new();
         bytes.push_str("Hello").unwrap();
         assert_eq!(bytes.as_str(), Some("Hello"));
@@ -602,7 +604,7 @@ mod tests {
     }
 
     #[test]
-    fn extend_from_slice() {
+    fn test_extend_from_slice() {
         let mut arr: PushArray<_, 10usize> = PushArray::new();
         let byte_slice = b"rogue-like";
 
@@ -612,7 +614,7 @@ mod tests {
     }
 
     #[test]
-    fn get() {
+    fn test_get() {
         let mut arr: PushArray<u8, 10> = PushArray::new();
         arr.push_str("Hey").unwrap();
 
@@ -623,7 +625,7 @@ mod tests {
     }
 
     #[test]
-    fn get_mut() {
+    fn test_get_mut() {
         let mut arr: PushArray<u8, 3> = PushArray::new();
         arr.push_str("Hey").unwrap();
 
@@ -636,7 +638,7 @@ mod tests {
     }
 
     #[test]
-    fn index_impl() {
+    fn test_index_impl() {
         let mut arr: PushArray<u8, 3> = PushArray::new();
 
         arr.push_str("Hey").unwrap();
@@ -648,7 +650,7 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn index_panics_when_out_of_bounds() {
+    fn test_index_panics_when_out_of_bounds() {
         let mut arr: PushArray<u8, 3> = PushArray::new();
 
         arr.push_str("Hey").unwrap();
@@ -661,14 +663,14 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn panics_when_overflows() {
+    fn test_panics_when_overflows() {
         let mut numbers: PushArray<u32, 1> = PushArray::new();
         numbers.push(2); // ok
         numbers.push(3); // uh-oh!
     }
 
     #[test]
-    fn initialized_i32() {
+    fn test_initialized_i32() {
         let mut numbers: PushArray<u32, 50> = PushArray::new();
         for number in [2, 5, 7, 2, 3, 4] {
             numbers.push(number);
@@ -681,7 +683,7 @@ mod tests {
     }
 
     #[test]
-    fn initialized_str() {
+    fn test_initialized_str() {
         let mut words: PushArray<&str, 50> = PushArray::new();
         for word in ["hey", "there", "friend"] {
             words.push(word);
@@ -694,13 +696,13 @@ mod tests {
     }
 
     #[test]
-    fn initiliazed_when_uninitialized() {
+    fn test_initiliazed_when_uninitialized() {
         let numbers: PushArray<u8, 20> = PushArray::new();
         assert_eq!(numbers, &[])
     }
 
     #[test]
-    fn collect_iterator() {
+    fn test_collect_iterator() {
         let array = [1, 2, 3, 4];
         let numbers: PushArray<u8, 20> = array.iter().copied().collect();
 
@@ -709,7 +711,7 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn collect_iterator_capacity_error() {
+    fn test_collect_iterator_capacity_error() {
         let array = [1, 2, 3, 4];
         let numbers: PushArray<u8, 3> = array.iter().copied().collect();
 
@@ -717,7 +719,7 @@ mod tests {
     }
 
     #[test]
-    fn collect_iterator_empty_without_capacity_dont_panic() {
+    fn test_collect_iterator_empty_without_capacity_dont_panic() {
         let array = [];
         let numbers: PushArray<u8, 0> = array.iter().copied().collect();
 
@@ -821,7 +823,7 @@ mod tests_with_std {
     use super::*;
 
     #[test]
-    fn drop() {
+    fn test_drop() {
         let arc = Arc::new(0);
 
         {
@@ -843,7 +845,7 @@ mod tests_with_std {
     }
 
     #[test]
-    fn clear() {
+    fn test_clear() {
         let arc = Arc::new(0);
 
         let mut arr: PushArray<_, 4> = PushArray::new();
@@ -861,7 +863,7 @@ mod tests_with_std {
     }
 
     #[test]
-    fn pop_drop() {
+    fn test_pop_drop() {
         let arc = Arc::new(0);
         let mut arr: PushArray<_, 1> = PushArray::new();
 
