@@ -198,16 +198,69 @@ impl<T, const CAP: usize> PushArray<T, CAP> {
         Some(())
     }
 
-    /// Removes the last element from the `PushArray`.
-    pub fn pop(&mut self) -> Option<T> {
-        self.len = self.len.checked_sub(1)?;
+    pub fn remove(&mut self, index: usize) -> T {
+        assert!(index < self.len());
 
-        let mut popped = MaybeUninit::uninit();
+        let value = unsafe { self.as_mut_ptr().add(index).read() };
+
+        for i in index..self.len - 1 {
+            unsafe {
+                let ptr = self.as_mut_ptr().add(i);
+                ptr.write(ptr.add(1).read());
+            }
+        }
+        self.len -= 1;
+
+        value
+    }
+
+    pub fn swap_remove(&mut self, index: usize) -> T {
+        #[cold]
+        #[inline(never)]
+        fn assert_failed(index: usize, len: usize) -> ! {
+            panic!("swap_remove index (is {index}) should be < len (is {len})");
+        }
+
+        let len = self.len();
+        if index >= len {
+            assert_failed(index, len);
+        }
         unsafe {
-            let ptr = self.as_ptr().add(self.len) as *const T;
-            popped.write(ptr.read());
-            // Safety: we've just written to `popped`, it's initialized
-            Some(popped.assume_init())
+            // We replace self[index] with the last element. Note that if the
+            // bounds check above succeeds there must be a last element (which
+            // can be self[index] itself).
+            let value = ptr::read(self.as_ptr().add(index));
+            let base_ptr = self.as_mut_ptr();
+            ptr::copy(base_ptr.add(len - 1), base_ptr.add(index), 1);
+            self.set_len(len - 1);
+            value
+        }
+    }
+
+    /// Removes the last element from a array and returns it, or [`None`] if it
+    /// is empty.
+    ///
+    /// If you'd like to pop the first element, consider using
+    /// [`VecDeque::pop_front`] instead.
+    ///
+    /// [`VecDeque::pop_front`]: crate::collections::VecDeque::pop_front
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut vec = vec![1, 2, 3];
+    /// assert_eq!(vec.pop(), Some(3));
+    /// assert_eq!(vec, [1, 2]);
+    /// ```
+    #[inline]
+    pub fn pop(&mut self) -> Option<T> {
+        if self.len == 0 {
+            None
+        } else {
+            unsafe {
+                self.len -= 1;
+                Some(ptr::read(self.as_ptr().add(self.len())))
+            }
         }
     }
 
@@ -698,6 +751,66 @@ mod tests {
         assert_eq!(array.capacity(), 6);
 
         assert_eq!(array, [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_sort() {
+        let mut arr: PushArray<i32, 1024> = [5, 3, 2, 1, 4].into();
+        arr.sort();
+        assert_eq!(&arr, &[1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_remove() {
+        let mut arr: PushArray<i32, 1024> = [4, 5, 1, 8, 2, 3, 6, 7].into();
+
+        assert_eq!(&arr, &[4, 5, 1, 8, 2, 3, 6, 7]);
+        assert_eq!(arr.remove(2), 1);
+        assert_eq!(&arr, &[4, 5, 8, 2, 3, 6, 7]);
+        assert_eq!(arr.remove(3), 2);
+        assert_eq!(&arr, &[4, 5, 8, 3, 6, 7]);
+        assert_eq!(arr.remove(3), 3);
+        assert_eq!(&arr, &[4, 5, 8, 6, 7]);
+        assert_eq!(arr.remove(0), 4);
+        assert_eq!(&arr, &[5, 8, 6, 7]);
+        assert_eq!(arr.remove(0), 5);
+        assert_eq!(&arr, &[8, 6, 7]);
+        assert_eq!(arr.remove(1), 6);
+        assert_eq!(&arr, &[8, 7]);
+        assert_eq!(arr.remove(1), 7);
+        assert_eq!(&arr, &[8]);
+        assert_eq!(arr.remove(0), 8);
+        assert_eq!(&arr, &[]);
+    }
+
+    #[test]
+    fn test_swap_remove() {
+        let mut arr: PushArray<i32, 1024> = [4, 5, 1, 8, 2, 3, 6, 7].into();
+
+        assert_eq!(&arr, &[4, 5, 1, 8, 2, 3, 6, 7]);
+        assert_eq!(arr.swap_remove(2), 1);
+        assert_eq!(&arr, &[4, 5, 7, 8, 2, 3, 6]);
+        assert_eq!(arr.swap_remove(4), 2);
+        assert_eq!(&arr, &[4, 5, 7, 8, 6, 3]);
+        assert_eq!(arr.swap_remove(5), 3);
+        assert_eq!(&arr, &[4, 5, 7, 8, 6]);
+        assert_eq!(arr.swap_remove(0), 4);
+        assert_eq!(&arr, &[6, 5, 7, 8]);
+        assert_eq!(arr.swap_remove(1), 5);
+        assert_eq!(&arr, &[6, 8, 7]);
+        assert_eq!(arr.swap_remove(0), 6);
+        assert_eq!(&arr, &[7, 8]);
+        assert_eq!(arr.swap_remove(0), 7);
+        assert_eq!(&arr, &[8]);
+        assert_eq!(arr.swap_remove(0), 8);
+        assert_eq!(&arr, &[]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_remove_panics() {
+        let mut arr: PushArray<i32, 1024> = arr![0; 1024];
+        arr.remove(1024);
     }
 }
 
